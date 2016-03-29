@@ -17,8 +17,10 @@ class Game {
     var possibleJackPast: Set<Node> { return graph.reachedNodes() }
     var certainJackPast: Set<Node> { return graph.nodesOnAllPaths() }
     var possibleHideouts: Set<Node> = []
+    var murderLocations: Set<Node> { return Set(graph.nextSteps.map { (step) in step.node }) }
     
-    func doJackStep(kind:Map.StepKind) -> Bool {
+    func doJackStep(kind:Map.StepKind) -> Bool
+    {
         if let newPath = graph.extend(kind, map: map) {
             graph = newPath
             if (kind != .Coach) {
@@ -68,7 +70,8 @@ class Game {
         }
     }
     
-    func newRound() {
+    func newRound()
+    {
         if (possibleHideouts.isEmpty) {
             possibleHideouts = currentJackLocations
         } else {
@@ -77,8 +80,19 @@ class Game {
         graph = Step()
     }
     
-    func setPoliceLocation(name:String, loc:CGPoint) -> Node? {
-        if let node = map.nodeAtLocation(loc) {
+    func isMurderStillPossible() -> Bool
+    {
+        for step in graph.nextSteps {
+            if !step.nextSteps.isEmpty {
+                return false
+            }
+        }
+        return true
+    }
+
+    func setPoliceLocation(name:String, loc:CGPoint) -> Node?
+    {
+        if let node = map.nodeAtLocation(loc, radius: 12) {
             if (node.kind == .Dot) {
                 if let oldNode = policeNodes[name] {
                     oldNode.kind = .Dot

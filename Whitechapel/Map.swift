@@ -133,9 +133,9 @@ let points: [Int: Array<Array<Int>>] = [
 118 : [[350,376, 310,398, 349,376, -308,309, 318,302, 308,285, 350,376, 377,362, 366,340, 354,316]],
 119 : [[386,384, 376,362]],
 120 : [[406,344, 377,361, 406,343, 436,326]],
-121 : [[428,384, 397,402, 386,384, 428,384, 440,405, 409,423, 398,402, 426,384, 427,373, -388,369, 377,361]],
-122 : [[473,356, 454,374, 427,373, 473,355, 492,346, 482,318]],
-123 : [[480,376, 456,374, 480,375, 512,380, -498,360, 492,346]],
+121 : [[428,384, 397,402, 386,384, 428,384, 440,405, 409,423, 398,402, 426,384, 427,371, -388,369, 377,361]],
+122 : [[473,356, 454,373, 427,370, 473,355, 492,346, 482,318]],
+123 : [[480,376, 454,373, 480,375, 512,380, -498,360, 492,346]],
 124 : [[531,346, 510,356, 499,361, 531,346, 520,322, 544,308]],
 125 : [[542,380, 513,379, 542,379, 564,384, 591,388, -596,380, 593,352]],
 126 : [[560,351, 544,309, 562,350, 565,384, 562,351, 592,352]],
@@ -211,15 +211,15 @@ let points: [Int: Array<Array<Int>>] = [
 
 ]
 
-struct TwoNode : Hashable {
-    var first:Node
-    var second:Node
+struct BlockSide : Hashable {
+    var from:Node
+    var to:Node
     
-    var hashValue: Int { return first.hashValue + 1023 * second.hashValue }
+    var hashValue: Int { return from.hashValue &+ 1023 &* to.hashValue }
 }
 
-func ==(lhs: TwoNode, rhs: TwoNode) -> Bool {
-    return lhs.first == rhs.first && lhs.second == rhs.second
+func ==(lhs: BlockSide, rhs: BlockSide) -> Bool {
+    return lhs.from == rhs.from && lhs.to == rhs.to
 }
 
 class Map {
@@ -270,11 +270,11 @@ class Map {
         }
     }
     
-    func determineBlock(start:Node, to:Node) -> Set<TwoNode>
+    func determineBlock(start:Node, to:Node) -> Set<BlockSide>
     {
         print(String(format:"block %d", start.number))
-        var done: Set<TwoNode> = []
-        done.insert(TwoNode(first: start, second: to))
+        var done: Set<BlockSide> = []
+        done.insert(BlockSide(from: start, to: to))
         var block: Set<Node> = []
         let circle = CGFloat(2 * M_PI)
         var node = to
@@ -294,12 +294,12 @@ class Map {
                     bestNode = next
                 }
             }
-            done.insert(TwoNode(first: node, second: bestNode))
+            done.insert(BlockSide(from: node, to: bestNode))
             node = bestNode
             bearing = (bearing + best + 1.5 * circle) % circle
         }
         if (!block.isEmpty && block.count < 20) {
-            // there is no point in adding it if the start node is the only one in the block
+            // there is no point in adding the block if it only contains the start node
             // also, avoid storing the single large block that lies outside all nodes
             block.insert(start)
             for node in block {
@@ -311,10 +311,10 @@ class Map {
 
     func determineBlocks()
     {
-        var done: Set<TwoNode> = []
+        var done: Set<BlockSide> = []
         for node in nodes.values {
             for neighbour in node.neighbourNodes {
-                if (!done.contains(TwoNode(first:node, second:neighbour))) {
+                if (!done.contains(BlockSide(from:node, to:neighbour))) {
                     done.unionInPlace(determineBlock(node, to: neighbour))
                 }
             }
@@ -346,12 +346,12 @@ class Map {
             }
             result.remove(from)
         }
-        return result;
+        return result
     }
     
-    func nodeAtLocation(loc:CGPoint) -> Node?
+    func nodeAtLocation(loc:CGPoint, radius:CGFloat = 8) -> Node?
     {
-        return allNodes.filter({ $0.kind != .Connect && distance($0.location, loc) < 7 }).first
+        return allNodes.filter{ $0.kind != .Connect && distance($0.location, loc) <= radius }.minElement{ distance($0.location, loc) < distance($1.location, loc) }
     }
     
     init()
