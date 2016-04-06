@@ -78,17 +78,18 @@ class ViewController: UIViewController, UIScrollViewDelegate {
     
     override func drawLayer(layer: CALayer, inContext ctx: CGContext) {
         let bbox = CGContextGetClipBoundingBox(ctx)
-        print(String(format: "bbox: %f, %f, %f, %f", bbox.origin.x, bbox.origin.y, bbox.size.width, bbox.size.height))
+//        print(String(format: "bbox: %f, %f, %f, %f", bbox.origin.x, bbox.origin.y, bbox.size.width, bbox.size.height))
 
         let bounds = CGRectInset(bbox, -10, -10)
 
         CGContextSetGrayStrokeColor(ctx, 0, 1)
         CGContextSetLineCap(ctx, .Round)
         
+        // draw the dotted lines for the paths
         CGContextSetLineWidth(ctx, 1)
         CGContextSetLineDash(ctx, 2, [2, 3], 2)
         for node in game.map.allNodes {
-            for subNode in node.neighbourNodes {
+            for subNode in node.neighbourNodes.filter({ $0.kind != .Alley }) {
                 if unsafeAddressOf(node) < unsafeAddressOf(subNode) {
                     let rect = CGRect(x: node.location.x,
                                       y: node.location.y,
@@ -230,6 +231,15 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         return scrollViewContent
     }
     
+    func scrollViewDidEndZooming(scrollView: UIScrollView, withView view: UIView?, atScale scale: CGFloat) {
+        let contentScale = scale * UIScreen.mainScreen().scale; // Handle retina
+        for view in overlayView.subviews {
+            view.contentScaleFactor = contentScale
+        }
+        
+        print("zoom acale:\(scale)")
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -261,6 +271,9 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         addPolice("Yellow", color: UIColor.yellowColor(), pt: CGPoint(x: 731, y: 391))
         addPolice("Brown",  color: UIColor.orangeColor(), pt: CGPoint(x: 392, y: 146))
         update()
+        dispatch_async(dispatch_get_main_queue()) { 
+            self.mapScrollView.zoomScale = self.mapScrollView.frame.size.height / self.scrollViewContent.frame.size.height
+        }
     }
 
     override func didReceiveMemoryWarning() {

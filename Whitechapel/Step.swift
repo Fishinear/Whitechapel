@@ -21,50 +21,62 @@ extension Dictionary {
     }
 }
 
+extension SequenceType {
+    func mapFilter<T>(function: (Self.Generator.Element) throws -> T?) rethrows -> [T]
+    {
+        var result:Array<T> = []
+        self.forEach { (element: Self.Generator.Element) in
+            if let ne = try? function(element) {
+                if let ne = ne {
+                    result.append(ne)
+                }
+            }
+        }
+        return result
+    }
+}
+
 class Step : Hashable {
-    enum TraverseKind { case Include, Exclude, Traverse }
+    enum Kind : Int { case Walk, Coach, Alley }
     
     var nextSteps : Array<Step> = []
-    var kind : Map.StepKind
+    var kind : Kind
     var node : Node
     
     var isLeaf : Bool { return nextSteps.isEmpty }
     
-    func traverseStep(inout visited:[Step:Step?], action:(Step) -> TraverseKind) -> Step?
+    /// Return the Traverse value from the action in traverse, if you want to traverse the tree
+    static let Traverse = Step()
+    
+    private func traverseStep(inout visited:[Step:Step?], action:(Step) -> Step?) -> Step?
     {
         if let newStep = visited[self] {
             // if we have already examined this step, then simply return the previous result
-            print("step: (\(self.node.number)) => \(newStep != nil)")
             return newStep
         }
-        let result = action(self)
-        print("step: \(self.node.number) => \(result)")
-        var newStep : Step? = self
-        if result == .Exclude {
-            newStep = nil
-        } else if result == .Traverse && !nextSteps.isEmpty {
-            // if this step should be included, then we simply keep it without traversing
-            // the descendants, because they may still be excluded from other paths
+        var newStep = action(self)
+        if newStep === Step.Traverse && !isLeaf {
             // if this is a Leaf node, then (if it should not be removed), we will keep it.
             // otherwise, we examine the children.
             
-            var children: Array<Step> = []
-            for child in nextSteps {
-                if let newChild = child.traverseStep(&visited, action: action) {
-                    children.append(newChild)
-                }
+            let children = nextSteps.mapFilter {
+                $0.traverseStep(&visited, action: action)
             }
-            print("     \(self.node.number) => \(children.isEmpty)")
             if children.isEmpty {
                 // if the children are all removed, then this step cannot be reached either
                 // and so it needs to be removed
                 newStep = nil
-            } else if children != nextSteps {
+            } else if children == nextSteps {
                 // optimization: simply return self if the children have not changed
+                newStep = self
+            } else {
                 // otherwise, create a new step with the new children
                 newStep = Step(node, kind)
                 newStep!.nextSteps = children
             }
+        }
+        if newStep === Step.Traverse {
+            newStep = self
         }
         visited[self] = newStep
         return newStep
@@ -75,11 +87,11 @@ class Step : Hashable {
     /// according to the instruction of the action and returns that
     /// - parameters:
     ///   - action: The action can return three values for a step, to determine what should be done. Return
-    ///     - **.Include** to include the step and all its decendants,
-    ///     - **.Exclude** to exclude the step and all its decendants, or
+    ///     - **a new step** to include the step and all its decendants (the new step can be the argument to action itself),
+    ///     - **nil** to exclude the step and all its decendants, or
     ///     - **.Traverse** to include the step, unless all decendants are excluded.
     /// - returns: the new graph
-    func traverse(action:(Step) -> TraverseKind) -> Step?
+    func traverse(action:(Step) -> Step?) -> Step?
     {
         var visited:[Step:Step?] = [:]
         return traverseStep(&visited, action: action)
@@ -89,56 +101,77 @@ class Step : Hashable {
     /// - parameters:
     ///   - excluded: The node to exclude
     /// - returns: the reduced graph
-    func exclude(excluded:Node) -> Step? {
-        return traverse { (step) in step.node == excluded ? .Exclude : .Traverse }
+    func exclude(excluded:Node) -> Step?
+    {
+        return traverse { (step) in step.node == excluded ? nil : .Traverse }
     }
     
     /// Ensures that all paths through the graph do **not** contain a particular node as a leaf
     /// - parameters:
     ///   - excluded: The node to exclude
     /// - returns: the reduced graph
-    func excludeLeaf(excluded:Node) -> Step? {
-        return traverse { (step) in (step.isLeaf && step.node == excluded) ? .Exclude : .Traverse }
+    func excludeLeaf(excluded:Node) -> Step?
+    {
+        return traverse { (step) in (step.isLeaf && step.node == excluded) ? nil : .Traverse }
     }
     
     /// Ensure that all paths through the graph contain a particular node
     /// - parameters:
     ///   - incuded: The node to include
     /// - returns: the reduced graph
-    func include(included:Node) -> Step? {
-        return traverse { (step) in step.node == included ? .Include : step.isLeaf ? .Exclude : .Traverse }
+    func include(included:Node) -> Step?
+    {
+        return traverse { (step) in step.node == included ? step : (step.isLeaf ? nil : .Traverse) }
+    }
+    
+    
+    private func extendStep(kind: Kind,
+                    traversable:Set<Node.Kind>,
+                    map: Map,
+                    inout addedSteps:[Node:Step],
+                    parent:Node?) -> Step?
+    {
+        let newStep = Step(node, kind)
+        if isLeaf {
+            let childNodes = map.reachable(from: node, traversable: traversable).filter { $0 != parent }
+            newStep.nextSteps = childNodes.map { node in
+                addedSteps.getOrSet(node) { Step(node, kind) }
+            }
+        } else {
+            newStep.nextSteps = nextSteps.mapFilter { step in
+                step.extendStep(kind,
+                    traversable: traversable,
+                    map: map,
+                    addedSteps: &addedSteps,
+                    parent: parent != nil ? self.node : nil)
+            }
+        }
+        return newStep.nextSteps.isEmpty ? nil : newStep
     }
     
     /// Extend the graph with new steps with nodes that are reachable from the leaf nodes.
     /// Note that this can also remove steps from the graph, if they cannot reach any new nodes
     ///
-    /// _This has a confusing implementation, because it does not only build a new graph, but adds children to
-    /// the existing graph as well. We should probably rewrite it_
     /// - parameters:
-    ///   - kind: the type of reachability to be used
+    ///   - kind: the kind of the new steps that are created
+    ///   - traversable: the Node kinds that can be walked through to reach a neighbour Node
     ///   - map: the map to determine reachability from
+    ///   - noGrandpa: set to true if it is not allowed to reach the node you just came from
     /// - returns: the new graph
-    func extend(kind: Map.StepKind, map: Map) -> Step? {
+    func extend(kind: Kind, traversable:Set<Node.Kind>, map: Map, noGrandpa: Bool = false) -> Step?
+    {
         var addedSteps : [Node:Step] = [:]
-        let result = traverse { (step) in
-            if !step.isLeaf {
-                return .Traverse
-            }
-            let nodes = map.reachable(from:step.node, kind:kind)
-            if nodes.isEmpty {
-                return .Exclude
-            }
-            step.nextSteps = Array(nodes).map {(node) in
-                addedSteps.getOrSet(node) { Step(node, kind) }
-            }
-            return .Include
-        }
-        return result
+        return extendStep(kind,
+                          traversable: traversable,
+                          map: map,
+                          addedSteps: &addedSteps,
+                          parent: noGrandpa ? self.node : nil)
     }
-    
+
     /// Returns the set of leaf nodes
     /// - returns: the set of leaf nodes
-    func leafNodes() -> Set<Node> {
+    func leafNodes() -> Set<Node>
+    {
         var nodes: Set<Node> = [];
         traverse { (step) in
             if (step.isLeaf) {
@@ -151,7 +184,8 @@ class Step : Hashable {
     
     /// Returns the set of all nodes in the graph, ignoring the leaf steps
     /// - returns: the set of nodes
-    func reachedNodes() -> Set<Node> {
+    func reachedNodes() -> Set<Node>
+    {
         var nodes: Set<Node> = [];
         traverse { (step) in
             if (!step.isLeaf) {
@@ -164,7 +198,8 @@ class Step : Hashable {
     
     /// Returns the nodes that are present on all possible paths through the graph
     /// - returns: the set of nodes
-    func nodesOnAllPaths() -> Set<Node> {
+    func nodesOnAllPaths() -> Set<Node>
+    {
         var nodes: Set<Node> = []
         var isFirst = true
         for child in self.nextSteps {
@@ -205,7 +240,7 @@ class Step : Hashable {
 
     var hashValue: Int { return unsafeAddressOf(self).hashValue }
     
-    init(_ node:Node, _ kind:Map.StepKind = .Walk) {
+    init(_ node:Node, _ kind:Kind = .Walk) {
         self.node = node;
         self.kind = kind;
     }

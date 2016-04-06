@@ -10,12 +10,11 @@ import Foundation
 import UIKit
 
 class Node : Hashable {
-    enum Kind { case Number, Dot, Police, Connect }
+    enum Kind { case Number, Dot, Police, Alley, Connect }
     var kind: Kind = .Number
     var number: Int
     var location: CGPoint
     var neighbourNodes: Set<Node> = []
-    var blockNeighbours: Array<Set<Node>> = []
     
     var hashValue: Int { return unsafeAddressOf(self).hashValue }
     

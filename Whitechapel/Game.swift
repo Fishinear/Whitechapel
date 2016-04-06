@@ -19,15 +19,21 @@ class Game {
     var possibleHideouts: Set<Node> = []
     var murderLocations: Set<Node> { return Set(graph.nextSteps.map { (step) in step.node }) }
     
-    func doJackStep(kind:Map.StepKind) -> Bool
+    func doJackStep(kind:Step.Kind) -> Bool
     {
-        if let newPath = graph.extend(kind, map: map) {
-            graph = newPath
+        let traversable: Set<Node.Kind>
+        switch kind {
+        case .Walk:     traversable = [.Dot, .Connect]
+        case .Coach:    traversable = [.Dot, .Connect, .Police]
+        case .Alley:    traversable = [.Alley]
+        }
+        if let newPath = graph.extend(kind, traversable: traversable, map: map) {
             if (kind != .Coach) {
+                graph = newPath
                 return true
             }
-            if let newPath = graph.extend(kind, map: map) {
-                graph = newPath
+            if let newPath2 = newPath.extend(kind, traversable: traversable, map: map, noGrandpa: true) {
+                graph = newPath2
                 return true
             }
         }

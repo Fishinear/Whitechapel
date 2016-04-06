@@ -70,7 +70,7 @@ let points: [Int: Array<Array<Int>>] = [
 55 : [[571,200, 556,174]],
 56 : [[649,188, 634,158, 618,134, 648,188, 616,206, 582,222, 570,199]],
 57 : [[701,164, 676,176, 649,188, 700,164, 740,148]],
-58 : [[802,164, 786,132, 802,164, 746,186, 740,149]],
+58 : [[802,164, -794,140, 786,132, 802,164, 746,186, 740,149]],
 59 : [[152,224, 147,208]],
 60 : [[177,234, 159,242, 152,224]],
 61 : [[258,233, -242,235, 236,221, 258,233, -276,231, 275,216]],
@@ -89,8 +89,8 @@ let points: [Int: Array<Array<Int>>] = [
 74 : [[782,221, 752,226, 782,220, 812,217, 808,184]],
 75 : [[814,230, 813,216, 782,220], [812,217, 808,183]],
 76 : [[836,213, 812,217, 836,212, 862,210, 867,236, 817,244, 814,230]],
-77 : [[910,202, 862,211, 910,202, 905,156, 882,96]],
-78 : [[217,276, 210,256, 198,238, 178,234, 218,276, 192,296, 170,272, 158,242]],
+77 : [[910,202, 862,211, 910,202, 905,156, -892,107, 882,96]],
+78 : [[217,276, 210,256, 198,238, 178,234, 218,276, 192,296, -177,272, 170,272, 158,242]],
 79 : [[226,252, 210,258, 226,251, 212,216, 196,170, 226,251, 237,269, 216,276]],
 80 : [[276,256, 236,269, 276,256, 320,250, 312,232]],
 81 : [[308,285, 292,294, 274,255]],
@@ -112,7 +112,7 @@ let points: [Int: Array<Array<Int>>] = [
 97 : [[252,300, 237,269, 250,300, 212,320, 202,307]],
 98 : [[354,314, 338,283, 320,249]],
 99 : [[450,314, 436,326, -420,324, 414,310, 402,288, 450,314, 464,304]],
-100 : [[481,318, 437,326, 480,318, 476,297]],
+100 : [[481,318, -457,328, 437,326, 480,318, 476,297]],
 101 : [[576,298, 544,309, 532,287]],
 102 : [[598,303, 579,248, 598,304, 612,349, 592,350, 576,298]],
 103 : [[638,300, 632,244]],
@@ -174,7 +174,7 @@ let points: [Int: Array<Array<Int>>] = [
 159 : [[664,467, 658,431, 652,390, 665,467, 648,470, 634,471, 664,466, 684,466, 682,390]],
 160 : [[707,466, 684,467, 706,466, 710,430, 706,390]],
 161 : [[734,437, 732,414, 732,390, 734,436, 755,437, 760,392, 734,437, 733,494, 710,496, 706,466]],
-162 : [[74,490, 78,461, 74,490, 150,490, 120,466]],
+162 : [[74,490, 78,461, 74,490, -134,495, 150,490, 120,466]],
 163 : [[162,483, 150,490, 162,483, 180,474]],
 164 : [[217,494, 207,458]],
 165 : [[344,512, 396,492, 385,470, 404,460]],
@@ -223,8 +223,6 @@ func ==(lhs: BlockSide, rhs: BlockSide) -> Bool {
 }
 
 class Map {
-    enum StepKind : Int { case Walk, Coach, Alley, Neighbour }
-
     var nodes: Dictionary<Int,Node>
     var allNodes: Array<Node>
     
@@ -270,18 +268,20 @@ class Map {
         }
     }
     
-    func determineBlock(start:Node, to:Node) -> Set<BlockSide>
+    func determineBlock(start:Node, to:Node, inout done:Set<BlockSide>) -> Node?
     {
         print(String(format:"block %d", start.number))
-        var done: Set<BlockSide> = []
         done.insert(BlockSide(from: start, to: to))
         var block: Set<Node> = []
         let circle = CGFloat(2 * M_PI)
+        var centre = start.location
         var node = to
         var bearing = atan2(to.location.y - start.location.y, to.location.x - start.location.x);
         while (node != start) {
             if (node.kind == .Number) {
                 block.insert(node)
+                centre.x += node.location.x
+                centre.y += node.location.y
                 print(String(format:"  found %d", node.number))
             }
             var best = circle
@@ -298,53 +298,55 @@ class Map {
             node = bestNode
             bearing = (bearing + best + 1.5 * circle) % circle
         }
-        if (!block.isEmpty && block.count < 20) {
+        if (block.isEmpty || block.count > 20) {
             // there is no point in adding the block if it only contains the start node
             // also, avoid storing the single large block that lies outside all nodes
+            return nil;
+        } else {
             block.insert(start)
-            for node in block {
-                node.blockNeighbours.append(block)
-            }
+            centre.x /= CGFloat(block.count)
+            centre.y /= CGFloat(block.count)
+            let alleyNode = Node(0, centre)
+            alleyNode.kind = .Alley
+            alleyNode.neighbourNodes = block
+            return alleyNode
         }
-        return done
     }
 
     func determineBlocks()
     {
         var done: Set<BlockSide> = []
+        var alleys: Set<Node> = []
         for node in nodes.values {
             for neighbour in node.neighbourNodes {
                 if (!done.contains(BlockSide(from:node, to:neighbour))) {
-                    done.unionInPlace(determineBlock(node, to: neighbour))
+                    if let alley = determineBlock(node, to: neighbour, done:&done) {
+                        alleys.insert(alley)
+                    }
                 }
+            }
+        }
+        for alley in alleys {
+            for node in alley.neighbourNodes {
+                node.neighbourNodes.insert(alley)
             }
         }
     }
 
-    func reachable(from from:Node, kind:StepKind) -> Set<Node> {
+    func reachable(from from:Node, traversable:Set<Node.Kind>) -> Set<Node> {
         var result: Set<Node> = [];
-        if (kind != .Alley) {
-            var examined = Set([from])
-            var todo = Set(from.neighbourNodes)
-            while let node = todo.first {
-                todo.remove(node)
-                if (!examined.contains(node)) {
-                    examined.insert(node)
-                    if (node.kind == .Number) {
-                        result.insert(node);
-                    } else if (
-                        !(kind == .Neighbour && node.kind != .Connect) &&
-                        !(kind == .Walk && node.kind == .Police))
-                    {
-                        todo = todo.union(node.neighbourNodes)
-                    }
+        var examined = Set([from])
+        var todo = Set(from.neighbourNodes)
+        while let node = todo.first {
+            todo.remove(node)
+            if !examined.contains(node) {
+                examined.insert(node)
+                if node.kind == .Number {
+                    result.insert(node)
+                } else if traversable.contains(node.kind) {
+                    todo = todo.union(node.neighbourNodes)
                 }
             }
-        } else {
-            for block in from.blockNeighbours {
-                result.unionInPlace(block)
-            }
-            result.remove(from)
         }
         return result
     }
