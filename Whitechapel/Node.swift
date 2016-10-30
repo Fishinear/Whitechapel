@@ -10,13 +10,13 @@ import Foundation
 import UIKit
 
 class Node : Hashable {
-    enum Kind { case Number, Dot, Police, Alley, Connect }
-    var kind: Kind = .Number
+    enum Kind { case number, dot, police, alley, connect }
+    var kind: Kind = .number
     var number: Int
     var location: CGPoint
     var neighbourNodes: Set<Node> = []
     
-    var hashValue: Int { return unsafeAddressOf(self).hashValue }
+    var hashValue: Int { return Unmanaged.passUnretained(self).toOpaque().hashValue }
     
     init(_ num:Int, _ loc: CGPoint) {
         number = num

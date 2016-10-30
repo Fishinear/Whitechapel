@@ -19,16 +19,17 @@ class Game {
     var possibleHideouts: Set<Node> = []
     var murderLocations: Set<Node> { return Set(graph.nextSteps.map { (step) in step.node }) }
     
-    func doJackStep(kind:Step.Kind) -> Bool
+    @discardableResult
+    func doJackStep(_ kind:Step.Kind) -> Bool
     {
         let traversable: Set<Node.Kind>
         switch kind {
-        case .Walk:     traversable = [.Dot, .Connect]
-        case .Coach:    traversable = [.Dot, .Connect, .Police]
-        case .Alley:    traversable = [.Alley]
+        case .walk:     traversable = [.dot, .connect]
+        case .coach:    traversable = [.dot, .connect, .police]
+        case .alley:    traversable = [.alley]
         }
         if let newPath = graph.extend(kind, traversable: traversable, map: map) {
-            if (kind != .Coach) {
+            if (kind != .coach) {
                 graph = newPath
                 return true
             }
@@ -40,13 +41,15 @@ class Game {
         return false
     }
     
-    func murder(node:Node) -> Bool
+    @discardableResult
+    func murder(_ node:Node) -> Bool
     {
         graph.nextSteps.append(Step(node))
         return true
     }
     
-    func setNotVisited(node:Node) -> Bool
+    @discardableResult
+    func setNotVisited(_ node:Node) -> Bool
     {
         if let newGraph = graph.exclude(node) {
             graph = newGraph
@@ -56,7 +59,8 @@ class Game {
         }
     }
     
-    func setVisited(node:Node) -> Bool
+    @discardableResult
+    func setVisited(_ node:Node) -> Bool
     {
         if let newGraph = graph.include(node) {
             graph = newGraph
@@ -66,7 +70,8 @@ class Game {
         }
     }
     
-    func arrest(node:Node) -> Bool
+    @discardableResult
+    func arrest(_ node:Node) -> Bool
     {
         if let newGraph = graph.excludeLeaf(node) {
             graph = newGraph
@@ -81,7 +86,7 @@ class Game {
         if (possibleHideouts.isEmpty) {
             possibleHideouts = currentJackLocations
         } else {
-            possibleHideouts.intersectInPlace(currentJackLocations)
+            possibleHideouts.formIntersection(currentJackLocations)
         }
         graph = Step()
     }
@@ -96,15 +101,15 @@ class Game {
         return true
     }
 
-    func setPoliceLocation(name:String, loc:CGPoint) -> Node?
+    func setPoliceLocation(_ name:String, loc:CGPoint) -> Node?
     {
-        if let node = map.nodeAtLocation(loc, radius: 12) {
-            if (node.kind == .Dot) {
+        if let node = map.nodeAtLocation(loc, radius: 20) {
+            if (node.kind == .dot) {
                 if let oldNode = policeNodes[name] {
-                    oldNode.kind = .Dot
+                    oldNode.kind = .dot
                 }
                 policeNodes[name] = node
-                node.kind = .Police
+                node.kind = .police
                 return node
             }
         }

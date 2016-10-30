@@ -9,7 +9,7 @@
 import UIKit
 
 class TiledView : UIView {
-    override class func layerClass() -> AnyClass {
+    override class var layerClass : AnyClass {
         return CATiledLayer.self
     }
 }

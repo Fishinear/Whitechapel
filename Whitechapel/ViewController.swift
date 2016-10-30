@@ -8,7 +8,8 @@
 
 import UIKit
 
-class ViewController: UIViewController, UIScrollViewDelegate {
+class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
+{
     
     @IBOutlet weak var mapScrollView: UIScrollView!
     @IBOutlet weak var scrollViewContent: UIView!
@@ -35,38 +36,38 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         game.graph.printGraph()
     }
         
-    @IBAction func moveJack(sender: AnyObject) {
+    @IBAction func moveJack(_ sender: AnyObject) {
         let controller: UIAlertController
         if game.murderLocations.count == 0 {
-            controller = UIAlertController(title: "Murder first", message: "Select a location to murder first", preferredStyle: .Alert)
-            controller.addAction(UIAlertAction(title: "OK", style: .Cancel, handler: nil))
+            controller = UIAlertController(title: "Murder first", message: "Select a location to murder first", preferredStyle: .alert)
+            controller.addAction(UIAlertAction(title: "OK", style: .cancel, handler: nil))
         } else {
-            controller = UIAlertController(title: nil, message: nil, preferredStyle: .ActionSheet)
-            controller.addAction(UIAlertAction(title: "Walk", style: .Default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.Walk)
+            controller = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+            controller.addAction(UIAlertAction(title: "Walk", style: .default, handler: { (UIAlertAction) in
+                self.game.doJackStep(.walk)
                 self.update()
             }))
-            controller.addAction(UIAlertAction(title: "Coach", style: .Default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.Coach)
+            controller.addAction(UIAlertAction(title: "Coach", style: .default, handler: { (UIAlertAction) in
+                self.game.doJackStep(.coach)
                 self.update()
             }))
-            controller.addAction(UIAlertAction(title: "Alley", style: .Default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.Alley)
+            controller.addAction(UIAlertAction(title: "Alley", style: .default, handler: { (UIAlertAction) in
+                self.game.doJackStep(.alley)
                 self.update()
             }))
-            controller.addAction(UIAlertAction(title: "Reached Hideout", style: .Destructive, handler: { (UIAlertAction) in
+            controller.addAction(UIAlertAction(title: "Reached Hideout", style: .destructive, handler: { (UIAlertAction) in
                 self.game.newRound()
                 self.update()
             }))
-            controller.addAction(UIAlertAction(title: "Cancel", style: .Cancel, handler: nil))
+            controller.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
         }
         if let presenter = controller.popoverPresentationController {
             presenter.barButtonItem = jackButton
         }
-        self.presentViewController(controller, animated: true, completion:nil)
+        self.present(controller, animated: true, completion:nil)
     }
     
-    func addPolice(name:String, color:UIColor, pt:CGPoint) {
+    func addPolice(_ name:String, color:UIColor, pt:CGPoint) {
         if let node = game.setPoliceLocation(name, loc: pt) {
             let view = PoliceView(withName:name, color: color, node:node)
             overlayView.addSubview(view)
@@ -76,74 +77,74 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         }
     }
     
-    override func drawLayer(layer: CALayer, inContext ctx: CGContext) {
-        let bbox = CGContextGetClipBoundingBox(ctx)
+    func draw(_ layer: CALayer, in ctx: CGContext) {
+        let bbox = ctx.boundingBoxOfClipPath
 //        print(String(format: "bbox: %f, %f, %f, %f", bbox.origin.x, bbox.origin.y, bbox.size.width, bbox.size.height))
 
-        let bounds = CGRectInset(bbox, -10, -10)
+        let bounds = bbox.insetBy(dx: -10, dy: -10)
 
-        CGContextSetGrayStrokeColor(ctx, 0, 1)
-        CGContextSetLineCap(ctx, .Round)
+        ctx.setStrokeColor(gray: 0, alpha: 1)
+        ctx.setLineCap(.round)
         
         // draw the dotted lines for the paths
-        CGContextSetLineWidth(ctx, 1)
-        CGContextSetLineDash(ctx, 2, [2, 3], 2)
+        ctx.setLineWidth(1)
+        ctx.setLineDash(phase: 2, lengths: [2, 3]);
         for node in game.map.allNodes {
-            for subNode in node.neighbourNodes.filter({ $0.kind != .Alley }) {
-                if unsafeAddressOf(node) < unsafeAddressOf(subNode) {
+            for subNode in node.neighbourNodes.filter({ $0.kind != .alley }) {
+                if Unmanaged.passUnretained(node).toOpaque() < Unmanaged.passUnretained(subNode).toOpaque() {
                     let rect = CGRect(x: node.location.x,
                                       y: node.location.y,
                                       width: subNode.location.x - node.location.x,
                                       height: subNode.location.y - node.location.y)
-                    if CGRectIntersectsRect(rect, bounds) {
-                        CGContextMoveToPoint(ctx, node.location.x, node.location.y)
-                        CGContextAddLineToPoint(ctx, subNode.location.x, subNode.location.y)
-                        CGContextDrawPath(ctx, .Stroke)
+                    if rect.intersects(bounds) {
+                        ctx.move(to: CGPoint(x: node.location.x, y: node.location.y))
+                        ctx.addLine(to: CGPoint(x: subNode.location.x, y: subNode.location.y))
+                        ctx.drawPath(using: .stroke)
                     }
                 }
             }
         }
         
-        CGContextSetLineWidth(ctx, 2)
-        CGContextSetLineDash(ctx, 0, nil, 0)
+        ctx.setLineWidth(2)
+        ctx.setLineDash(phase:0, lengths:[]);
 
         UIGraphicsPushContext(ctx)
-        let font = UIFont.systemFontOfSize(6, weight: UIFontWeightBold)
+        let font = UIFont.systemFont(ofSize: 6, weight: UIFontWeightBold)
         var attrs:[String: AnyObject] = [NSFontAttributeName : font]
         for (number, node) in game.map.nodes {
             let loc = node.location
-            if (!CGRectContainsPoint(bounds, loc)) {
+            if (!bounds.contains(loc)) {
                 continue
             }
             if (game.murderLocations.contains(node)) {
-                CGContextSetRGBFillColor(ctx, 1, 0, 0, 1)
+                ctx.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
             } else if (certainJackPast.contains(node)) {
-                CGContextSetRGBFillColor(ctx, 1, 1, 0, 1)
+                ctx.setFillColor(red: 1, green: 1, blue: 0, alpha: 1)
             } else if (possibleJackPast.contains(node)) {
-                CGContextSetRGBFillColor(ctx, 1, 1, 0.7, 1)
+                ctx.setFillColor(red: 1, green: 1, blue: 0.7, alpha: 1)
             } else {
-                CGContextSetGrayFillColor(ctx, 1, 1)
+                ctx.setFillColor(gray: 1, alpha: 1)
             }
             if (possibleJackPositions.contains(node)) {
-                CGContextSetRGBStrokeColor(ctx, 1, 0, 0, 1)
+                ctx.setStrokeColor(red: 1, green: 0, blue: 0, alpha: 1)
             } else {
-                CGContextSetGrayStrokeColor(ctx, 0, 1)
+                ctx.setStrokeColor(gray: 0, alpha: 1)
             }
             if (game.possibleHideouts.contains(node)) {
-                CGContextSetLineDash(ctx, 0, [0, CGFloat(M_PI)], 2)
+                ctx.setLineDash(phase: 0, lengths: [0, CGFloat(M_PI)]);
             } else {
-                CGContextSetLineDash(ctx, 0, nil, 0)
+                ctx.setLineDash(phase: 0, lengths: []);
             }
-            CGContextAddArc(ctx, loc.x, loc.y, CIRCLE_RADIUS, 0, CGFloat(2 * M_PI), 1)
-            CGContextClosePath(ctx)
-            CGContextDrawPath(ctx, .FillStroke)
+            ctx.addArc(center: loc, radius: CIRCLE_RADIUS, startAngle: 0, endAngle:  CGFloat(2 * M_PI), clockwise: true)
+            ctx.closePath()
+            ctx.drawPath(using: .fillStroke)
             
-            let textColor = game.murderLocations.contains(node) ? UIColor.whiteColor() : UIColor.blackColor()
+            let textColor = game.murderLocations.contains(node) ? UIColor.white : UIColor.black
             attrs[NSForegroundColorAttributeName] = textColor
-            let string: NSString = String(format: "%d", number)
-            let size = string.sizeWithAttributes(attrs)
+            let string: NSString = String(format: "%d", number) as NSString
+            let size = string.size(attributes: attrs)
             let pt = CGPoint(x: loc.x - size.width / 2, y: loc.y - size.height / 2)
-            string.drawAtPoint(pt, withAttributes: attrs)
+            string.draw(at: pt, withAttributes: attrs)
         }
 
 /*
@@ -167,57 +168,57 @@ class ViewController: UIViewController, UIScrollViewDelegate {
     }
     
     //The event handling methods
-    func handleSingleTap(recognizer:UITapGestureRecognizer)
+    func handleSingleTap(_ recognizer:UITapGestureRecognizer)
     {
-        let location = recognizer.locationInView(overlayView);
+        let location = recognizer.location(in: overlayView);
         print(String(format: "%1.0f,%1.0f, ", location.x, location.y))
         if let node = game.map.nodeAtLocation(location) {
-            if (node.kind == .Number) {
-                let controller = UIAlertController(title:nil, message: nil, preferredStyle: .ActionSheet)
-                let notVisitedAction = UIAlertAction(title: "Not visited", style: .Default, handler: { (UIAlertAction) in
+            if (node.kind == .number) {
+                let controller = UIAlertController(title:nil, message: nil, preferredStyle: .actionSheet)
+                let notVisitedAction = UIAlertAction(title: "Not visited", style: .default, handler: { (UIAlertAction) in
                     self.game.setNotVisited(node)
                     self.update()
                 })
-                let visitedAction = UIAlertAction(title: "Visited", style: .Default, handler: { (UIAlertAction) in
+                let visitedAction = UIAlertAction(title: "Visited", style: .default, handler: { (UIAlertAction) in
                     self.game.setVisited(node)
                     self.update()
                 })
-                let arrestAction = UIAlertAction(title: "Arrest", style: .Default, handler: { (UIAlertAction) in
+                let arrestAction = UIAlertAction(title: "Arrest", style: .default, handler: { (UIAlertAction) in
                     self.game.arrest(node)
                     self.update()
                 })
-                let murderAction = UIAlertAction(title: "Murder", style: .Destructive, handler: { (UIAlertAction) in
+                let murderAction = UIAlertAction(title: "Murder", style: .destructive, handler: { (UIAlertAction) in
                     self.game.murder(node)
                     self.update()
                 })
-                notVisitedAction.enabled = game.murderLocations.count > 0
-                visitedAction.enabled = game.murderLocations.count > 0 &&
+                notVisitedAction.isEnabled = game.murderLocations.count > 0
+                visitedAction.isEnabled = game.murderLocations.count > 0 &&
                                         (possibleJackPast.contains(node) || possibleJackPositions.contains(node))
-                arrestAction.enabled = visitedAction.enabled
-                murderAction.enabled = game.isMurderStillPossible()
+                arrestAction.isEnabled = visitedAction.isEnabled
+                murderAction.isEnabled = game.isMurderStillPossible()
                 
                 controller.addAction(notVisitedAction)
                 controller.addAction(visitedAction)
                 controller.addAction(arrestAction)
                 controller.addAction(murderAction)
                 
-                controller.addAction(UIAlertAction(title: "Cancel", style: .Cancel, handler: nil))
+                controller.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
                 
                 if let presenter = controller.popoverPresentationController {
                     presenter.sourceView = self.overlayView;
                     let rect = CGRect(x:node.location.x, y:node.location.y, width:0, height:0)
-                    presenter.sourceRect = CGRectInset(rect, -CIRCLE_RADIUS, -CIRCLE_RADIUS);
+                    presenter.sourceRect = rect.insetBy(dx: -CIRCLE_RADIUS, dy: -CIRCLE_RADIUS);
                 }
-                self.presentViewController(controller, animated: true, completion:nil)
+                self.present(controller, animated: true, completion:nil)
             }
         }
     }
     
-    func dragPolice(recognizer:UIPanGestureRecognizer)
+    func dragPolice(_ recognizer:UIPanGestureRecognizer)
     {
-        let location = recognizer.locationInView(overlayView);
+        let location = recognizer.location(in: overlayView);
         recognizer.view!.center = location
-        if (recognizer.state == .Ended) {
+        if (recognizer.state == .ended) {
             let view = recognizer.view! as! PoliceView
             if let node = game.setPoliceLocation(view.name, loc: location) {
                 view.node = node
@@ -226,13 +227,13 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         }
     }
     
-    func viewForZoomingInScrollView(scrollView: UIScrollView) -> UIView?
+    func viewForZooming(in scrollView: UIScrollView) -> UIView?
     {
         return scrollViewContent
     }
     
-    func scrollViewDidEndZooming(scrollView: UIScrollView, withView view: UIView?, atScale scale: CGFloat) {
-        let contentScale = scale * UIScreen.mainScreen().scale; // Handle retina
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        let contentScale = scale * UIScreen.main.scale; // Handle retina
         for view in overlayView.subviews {
             view.contentScaleFactor = contentScale
         }
@@ -245,7 +246,7 @@ class ViewController: UIViewController, UIScrollViewDelegate {
         
         let tiledLayer = mapView.layer as! CATiledLayer
         tiledLayer.delegate = self
-        tiledLayer.tileSize = CGSizeMake(256.0, 256.0)
+        tiledLayer.tileSize = CGSize(width: 256.0, height: 256.0)
             
         tiledLayer.levelsOfDetail = 5
         tiledLayer.levelsOfDetailBias = 5
@@ -265,13 +266,13 @@ class ViewController: UIViewController, UIScrollViewDelegate {
             556,175,
             392,146,
          */
-        addPolice("Blue",   color: UIColor.blueColor(), pt: CGPoint(x: 377, y: 362))
-        addPolice("Red",    color: UIColor.redColor(), pt: CGPoint(x: 740, y: 150))
-        addPolice("Green",  color: UIColor.greenColor(), pt: CGPoint(x: 228, y: 445))
-        addPolice("Yellow", color: UIColor.yellowColor(), pt: CGPoint(x: 731, y: 391))
-        addPolice("Brown",  color: UIColor.orangeColor(), pt: CGPoint(x: 392, y: 146))
+        addPolice("Blue",   color: UIColor.blue, pt: CGPoint(x: 377, y: 362))
+        addPolice("Red",    color: UIColor.red, pt: CGPoint(x: 740, y: 150))
+        addPolice("Green",  color: UIColor.green, pt: CGPoint(x: 228, y: 445))
+        addPolice("Yellow", color: UIColor.yellow, pt: CGPoint(x: 731, y: 391))
+        addPolice("Brown",  color: UIColor.orange, pt: CGPoint(x: 392, y: 146))
         update()
-        dispatch_async(dispatch_get_main_queue()) { 
+        DispatchQueue.main.async { 
             self.mapScrollView.zoomScale = self.mapScrollView.frame.size.height / self.scrollViewContent.frame.size.height
         }
     }

@@ -9,7 +9,7 @@
 import UIKit
 
 extension Dictionary {
-    mutating func getOrSet(key:Key, _ action:() -> Value) -> Value
+    mutating func getOrSet(_ key:Key, _ action:() -> Value) -> Value
     {
         if let value = self[key] {
             return value
@@ -21,11 +21,11 @@ extension Dictionary {
     }
 }
 
-extension SequenceType {
-    func mapFilter<T>(function: (Self.Generator.Element) throws -> T?) rethrows -> [T]
+extension Sequence {
+    func mapFilter<T>(_ function: (Self.Iterator.Element) throws -> T?) rethrows -> [T]
     {
         var result:Array<T> = []
-        self.forEach { (element: Self.Generator.Element) in
+        self.forEach { (element: Self.Iterator.Element) in
             if let ne = try? function(element) {
                 if let ne = ne {
                     result.append(ne)
@@ -37,7 +37,7 @@ extension SequenceType {
 }
 
 class Step : Hashable {
-    enum Kind : Int { case Walk, Coach, Alley }
+    enum Kind : Int { case walk, coach, alley }
     
     var nextSteps : Array<Step> = []
     var kind : Kind
@@ -48,7 +48,7 @@ class Step : Hashable {
     /// Return the Traverse value from the action in traverse, if you want to traverse the tree
     static let Traverse = Step()
     
-    private func traverseStep(inout visited:[Step:Step?], action:(Step) -> Step?) -> Step?
+    fileprivate func traverseStep(_ visited:inout [Step:Step?], action:(Step) -> Step?) -> Step?
     {
         if let newStep = visited[self] {
             // if we have already examined this step, then simply return the previous result
@@ -91,7 +91,8 @@ class Step : Hashable {
     ///     - **nil** to exclude the step and all its decendants, or
     ///     - **.Traverse** to include the step, unless all decendants are excluded.
     /// - returns: the new graph
-    func traverse(action:(Step) -> Step?) -> Step?
+    @discardableResult
+    func traverse(_ action:(Step) -> Step?) -> Step?
     {
         var visited:[Step:Step?] = [:]
         return traverseStep(&visited, action: action)
@@ -101,7 +102,7 @@ class Step : Hashable {
     /// - parameters:
     ///   - excluded: The node to exclude
     /// - returns: the reduced graph
-    func exclude(excluded:Node) -> Step?
+    func exclude(_ excluded:Node) -> Step?
     {
         return traverse { (step) in step.node == excluded ? nil : .Traverse }
     }
@@ -110,7 +111,7 @@ class Step : Hashable {
     /// - parameters:
     ///   - excluded: The node to exclude
     /// - returns: the reduced graph
-    func excludeLeaf(excluded:Node) -> Step?
+    func excludeLeaf(_ excluded:Node) -> Step?
     {
         return traverse { (step) in (step.isLeaf && step.node == excluded) ? nil : .Traverse }
     }
@@ -119,16 +120,16 @@ class Step : Hashable {
     /// - parameters:
     ///   - incuded: The node to include
     /// - returns: the reduced graph
-    func include(included:Node) -> Step?
+    func include(_ included:Node) -> Step?
     {
         return traverse { (step) in step.node == included ? step : (step.isLeaf ? nil : .Traverse) }
     }
     
     
-    private func extendStep(kind: Kind,
+    fileprivate func extendStep(_ kind: Kind,
                     traversable:Set<Node.Kind>,
                     map: Map,
-                    inout addedSteps:[Node:Step],
+                    addedSteps:inout [Node:Step],
                     parent:Node?) -> Step?
     {
         let newStep = Step(node, kind)
@@ -158,7 +159,7 @@ class Step : Hashable {
     ///   - map: the map to determine reachability from
     ///   - noGrandpa: set to true if it is not allowed to reach the node you just came from
     /// - returns: the new graph
-    func extend(kind: Kind, traversable:Set<Node.Kind>, map: Map, noGrandpa: Bool = false) -> Step?
+    func extend(_ kind: Kind, traversable:Set<Node.Kind>, map: Map, noGrandpa: Bool = false) -> Step?
     {
         var addedSteps : [Node:Step] = [:]
         return extendStep(kind,
@@ -208,14 +209,14 @@ class Step : Hashable {
                 nodes = childNodes;
                 isFirst = false
             } else {
-                nodes.intersectInPlace(childNodes)
+                nodes.formIntersection(childNodes)
             }
         }
         nodes.insert(self.node)
         return nodes
     }
  
-    func printGraphStep(level: Int, inout visited:Set<Step>)
+    func printGraphStep(_ level: Int, visited:inout Set<Step>)
     {
         for _ in 0...level {
             print("  ", terminator:"")
@@ -238,9 +239,9 @@ class Step : Hashable {
         self.printGraphStep(0, visited: &visited)
     }
 
-    var hashValue: Int { return unsafeAddressOf(self).hashValue }
+    var hashValue: Int { return Unmanaged.passUnretained(self).toOpaque().hashValue }
     
-    init(_ node:Node, _ kind:Kind = .Walk) {
+    init(_ node:Node, _ kind:Kind = .walk) {
         self.node = node;
         self.kind = kind;
     }

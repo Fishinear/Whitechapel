@@ -8,7 +8,7 @@
 
 import UIKit
 
-func distance(pt1:CGPoint, _ pt2:CGPoint) -> CGFloat {
+func distance(_ pt1:CGPoint, _ pt2:CGPoint) -> CGFloat {
     return hypot(pt1.x - pt2.x, pt1.y - pt2.y)
 }
 
@@ -228,8 +228,8 @@ class Map {
     
     func determineNodes()
     {
-        let sortedKeys = points.keys.sort()
-        var kind = Node.Kind.Dot
+        let sortedKeys = points.keys.sorted()
+        var kind = Node.Kind.dot
         for number in sortedKeys {
             let list = points[number]!
             var mainNode : Node? = nil
@@ -239,7 +239,7 @@ class Map {
                 for (num) in sublist {
                     if (x == 0) {
                         x = abs(num)
-                        kind = num < 0 ? .Connect : .Dot
+                        kind = num < 0 ? .connect : .dot
                     } else {
                         let pt = CGPoint(x:x, y:num)
                         var newNode = mainNode
@@ -268,7 +268,7 @@ class Map {
         }
     }
     
-    func determineBlock(start:Node, to:Node, inout done:Set<BlockSide>) -> Node?
+    func determineBlock(_ start:Node, to:Node, done:inout Set<BlockSide>) -> Node?
     {
         print(String(format:"block %d", start.number))
         done.insert(BlockSide(from: start, to: to))
@@ -278,7 +278,7 @@ class Map {
         var node = to
         var bearing = atan2(to.location.y - start.location.y, to.location.x - start.location.x);
         while (node != start) {
-            if (node.kind == .Number) {
+            if (node.kind == .number) {
                 block.insert(node)
                 centre.x += node.location.x
                 centre.y += node.location.y
@@ -288,7 +288,7 @@ class Map {
             var bestNode = start
             for next in node.neighbourNodes {
                 let nextBearing = atan2(next.location.y - node.location.y, next.location.x - node.location.x)
-                let diff = (nextBearing - bearing + 1.5 * circle) % circle
+                let diff = (nextBearing - bearing + 1.5 * circle).truncatingRemainder(dividingBy: circle)
                 if (diff > 0.001 && diff < best) {
                     best = diff
                     bestNode = next
@@ -296,7 +296,7 @@ class Map {
             }
             done.insert(BlockSide(from: node, to: bestNode))
             node = bestNode
-            bearing = (bearing + best + 1.5 * circle) % circle
+            bearing = (bearing + best + 1.5 * circle).truncatingRemainder(dividingBy: circle)
         }
         if (block.isEmpty || block.count > 20) {
             // there is no point in adding the block if it only contains the start node
@@ -307,7 +307,7 @@ class Map {
             centre.x /= CGFloat(block.count)
             centre.y /= CGFloat(block.count)
             let alleyNode = Node(0, centre)
-            alleyNode.kind = .Alley
+            alleyNode.kind = .alley
             alleyNode.neighbourNodes = block
             return alleyNode
         }
@@ -333,7 +333,7 @@ class Map {
         }
     }
 
-    func reachable(from from:Node, traversable:Set<Node.Kind>) -> Set<Node> {
+    func reachable(from:Node, traversable:Set<Node.Kind>) -> Set<Node> {
         var result: Set<Node> = [];
         var examined = Set([from])
         var todo = Set(from.neighbourNodes)
@@ -341,7 +341,7 @@ class Map {
             todo.remove(node)
             if !examined.contains(node) {
                 examined.insert(node)
-                if node.kind == .Number {
+                if node.kind == .number {
                     result.insert(node)
                 } else if traversable.contains(node.kind) {
                     todo = todo.union(node.neighbourNodes)
@@ -351,9 +351,9 @@ class Map {
         return result
     }
     
-    func nodeAtLocation(loc:CGPoint, radius:CGFloat = 8) -> Node?
+    func nodeAtLocation(_ loc:CGPoint, radius:CGFloat = 8) -> Node?
     {
-        return allNodes.filter{ $0.kind != .Connect && distance($0.location, loc) <= radius }.minElement{ distance($0.location, loc) < distance($1.location, loc) }
+        return allNodes.filter{ $0.kind != .connect && distance($0.location, loc) <= radius }.min{ distance($0.location, loc) < distance($1.location, loc) }
     }
     
     init()
