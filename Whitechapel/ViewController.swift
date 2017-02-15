@@ -343,11 +343,13 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
         jackButton.setImage(image.addShadow(blurSize:6.0), for: .normal)
         let tiledLayer = mapView.layer as! CATiledLayer
         tiledLayer.delegate = self
-        tiledLayer.tileSize = CGSize(width: 256.0, height: 256.0)
+        tiledLayer.tileSize = CGSize(width: 1024, height: 1024)
             
         tiledLayer.levelsOfDetail = 5
         tiledLayer.levelsOfDetailBias = 5
         tiledLayer.frame = mapView.bounds
+        
+       // mapView.contentScaleFactor = 1
         
         let singleFingerTap = UITapGestureRecognizer(target: self, action: #selector(ViewController.handleSingleTap))
         overlayView.addGestureRecognizer(singleFingerTap)
