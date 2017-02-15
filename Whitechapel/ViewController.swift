@@ -8,6 +8,31 @@
 
 import UIKit
 
+extension UIImage {
+    
+    func addShadow(blurSize: CGFloat = 6.0) -> UIImage {
+        
+        let shadowColor = UIColor(red:0.87, green:0.78, blue:0.67, alpha:0.8).cgColor
+        
+        let context = CGContext(data: nil,
+                                width: Int(self.size.width + blurSize),
+                                height: Int(self.size.height + blurSize),
+                                bitsPerComponent: self.cgImage!.bitsPerComponent,
+                                bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        
+        context.setShadow(offset: CGSize(width: blurSize/2,height: -blurSize/2),
+                          blur: blurSize,
+                          color: shadowColor)
+        context.draw(self.cgImage!,
+                     in: CGRect(x: 0, y: blurSize, width: self.size.width, height: self.size.height),
+                     byTiling:false);
+        
+        return UIImage(cgImage: context.makeImage()!)
+    }
+}
+
 class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
 {
     
@@ -15,12 +40,13 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
     @IBOutlet weak var scrollViewContent: UIView!
     @IBOutlet weak var mapView: UIView!
     @IBOutlet weak var overlayView: UIView!
-    @IBOutlet weak var jackButton: UIBarButtonItem!
+    @IBOutlet weak var jackButton: UIButton!
     
     @IBOutlet weak var toolbar: UIToolbar!
     
     let CIRCLE_RADIUS: CGFloat = 8
     
+    var mapContentSize = CGSize()
     var tiledLayer: CATiledLayer?
     var game = Game()
     var number = 1
@@ -37,47 +63,99 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
     }
         
     @IBAction func moveJack(_ sender: AnyObject) {
-        let controller: UIAlertController
-        if game.murderLocations.count == 0 {
-            controller = UIAlertController(title: "Murder first", message: "Select a location to murder first", preferredStyle: .alert)
-            controller.addAction(UIAlertAction(title: "OK", style: .cancel, handler: nil))
-        } else {
-            controller = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-            controller.addAction(UIAlertAction(title: "Walk", style: .default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.walk)
-                self.update()
-            }))
-            controller.addAction(UIAlertAction(title: "Coach", style: .default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.coach)
-                self.update()
-            }))
-            controller.addAction(UIAlertAction(title: "Alley", style: .default, handler: { (UIAlertAction) in
-                self.game.doJackStep(.alley)
-                self.update()
-            }))
-            controller.addAction(UIAlertAction(title: "Reached Hideout", style: .destructive, handler: { (UIAlertAction) in
-                self.game.newRound()
-                self.update()
-            }))
-            controller.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
-        }
-        if let presenter = controller.popoverPresentationController {
-            presenter.barButtonItem = jackButton
-        }
+        let enabled = game.murderLocations.count != 0
+        let controller = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        var action = UIAlertAction(title: "Walk", style: .default, handler: { _ in
+            self.game.doJackStep(.walk)
+            self.update()
+        })
+        action.isEnabled = enabled
+        controller.addAction(action)
+        action = UIAlertAction(title: "Coach", style: .default, handler: { _ in
+            self.game.doJackStep(.coach)
+            self.update()
+        })
+        action.isEnabled = enabled
+        controller.addAction(action)
+        action = UIAlertAction(title: "Alley", style: .default, handler: { _ in
+            self.game.doJackStep(.alley)
+            self.update()
+        })
+        action.isEnabled = enabled
+        controller.addAction(action)
+        action = UIAlertAction(title: "Walk to hideout", style: .destructive, handler: { _ in
+            self.game.doJackStep(.walk)
+            self.game.newRound()
+            self.update()
+        })
+        action.isEnabled = enabled
+        controller.addAction(action)
+        
+        controller.addAction(UIAlertAction(title: "New game", style: .destructive, handler: { _ in
+            let confirmation = UIAlertController(title: "Start new game",
+                                                 message: "Are you sure you want to start a new game?",
+                                                 preferredStyle: .alert)
+            if !enabled && self.game.possibleHideouts.isEmpty {
+                confirmation.message = "Select a murder location to start the game"
+                confirmation.addAction(UIAlertAction(title: "OK", style: .cancel))
+            } else {
+                confirmation.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                confirmation.addAction(UIAlertAction(title: "New game", style: .destructive, handler: { _ in
+                    self.resetGame()
+                }))
+            }
+            confirmation.view.layoutIfNeeded()
+            self.present(confirmation, animated: true, completion: nil)
+        }))
+        controller.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        controller.popoverPresentationController?.sourceView = jackButton.superview
+        controller.popoverPresentationController?.sourceRect = jackButton.frame
+
+        controller.view.layoutIfNeeded()
         self.present(controller, animated: true, completion:nil)
     }
     
-    func addPolice(_ name:String, color:UIColor, pt:CGPoint) {
+    func addPolice(_ name:String, color:UIColor, pt:CGPoint)
+    {
         if let node = game.setPoliceLocation(name, loc: pt) {
             let view = PoliceView(withName:name, color: color, node:node)
             overlayView.addSubview(view)
             view.center = pt
             let dragGesture = UIPanGestureRecognizer(target: self, action: #selector(ViewController.dragPolice))
             view.addGestureRecognizer(dragGesture)
+            let scrollGesture = mapScrollView.panGestureRecognizer
+            scrollGesture.require(toFail: dragGesture)
         }
     }
     
-    func draw(_ layer: CALayer, in ctx: CGContext) {
+    func resetGame()
+    {
+        /* Police Stations:
+         377,362, blue
+         228,445, green
+         740,147, red
+         731,391, yellow
+         392,146, orange
+         556,175,
+         593,351,
+         */
+        game = Game()
+        overlayView.subviews.forEach { $0.removeFromSuperview() }
+        addPolice("Blue",   color: UIColor.blue, pt: CGPoint(x: 377, y: 362))
+        addPolice("Red",    color: UIColor.red, pt: CGPoint(x: 740, y: 150))
+        addPolice("Green",  color: UIColor.green, pt: CGPoint(x: 228, y: 445))
+        addPolice("Yellow", color: UIColor.yellow, pt: CGPoint(x: 731, y: 391))
+        addPolice("Brown",  color: UIColor.orange, pt: CGPoint(x: 392, y: 146))
+
+        update()
+        DispatchQueue.main.async {
+            self.setMinZoom(size: self.mapScrollView.frame.size)
+            self.mapScrollView.zoomScale = self.mapScrollView.minimumZoomScale;
+        }
+    }
+    
+    func draw(_ layer: CALayer, in ctx: CGContext)
+    {
         let bbox = ctx.boundingBoxOfClipPath
 //        print(String(format: "bbox: %f, %f, %f, %f", bbox.origin.x, bbox.origin.y, bbox.size.width, bbox.size.height))
 
@@ -183,7 +261,7 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
                     self.game.setVisited(node)
                     self.update()
                 })
-                let arrestAction = UIAlertAction(title: "Arrest", style: .default, handler: { (UIAlertAction) in
+                let arrestAction = UIAlertAction(title: "Failed arrest", style: .default, handler: { (UIAlertAction) in
                     self.game.arrest(node)
                     self.update()
                 })
@@ -204,6 +282,7 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
                 
                 controller.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
                 
+                controller.view.layoutIfNeeded()
                 if let presenter = controller.popoverPresentationController {
                     presenter.sourceView = self.overlayView;
                     let rect = CGRect(x:node.location.x, y:node.location.y, width:0, height:0)
@@ -233,17 +312,35 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
     }
     
     func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
-        let contentScale = scale * UIScreen.main.scale; // Handle retina
-        for view in overlayView.subviews {
-            view.contentScaleFactor = contentScale
-        }
-        
-        print("zoom acale:\(scale)")
+//        let contentScale = scale * UIScreen.main.scale; // Handle retina
+//        for view in overlayView.subviews {
+//            view.contentScaleFactor = contentScale
+//        }
+//        
+        print("zoom acale:\(scale) minzoom:\(mapScrollView.minimumZoomScale) size:\(mapScrollView.frame.size)")
     }
     
-    override func viewDidLoad() {
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator)
+    {
+        setMinZoom(size: size);
+    }
+
+    func setMinZoom(size: CGSize)
+    {
+        let minZoomScale = max(1, size.width / mapContentSize.width, size.height / mapContentSize.height)
+        print("minzoom current:\(mapScrollView.minimumZoomScale) new:\(minZoomScale) size:\(size) content:\(mapContentSize) contentSize:\(mapScrollView.contentSize)")
+        mapScrollView.minimumZoomScale = minZoomScale
+        if mapScrollView.zoomScale < minZoomScale {
+            mapScrollView.zoomScale = minZoomScale
+        }
+    }
+    
+    override func viewDidLoad()
+    {
         super.viewDidLoad()
         
+        let image = jackButton.image(for:.normal)!
+        jackButton.setImage(image.addShadow(blurSize:6.0), for: .normal)
         let tiledLayer = mapView.layer as! CATiledLayer
         tiledLayer.delegate = self
         tiledLayer.tileSize = CGSize(width: 256.0, height: 256.0)
@@ -254,27 +351,10 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
         
         let singleFingerTap = UITapGestureRecognizer(target: self, action: #selector(ViewController.handleSingleTap))
         overlayView.addGestureRecognizer(singleFingerTap)
-        mapScrollView.contentSize = scrollViewContent.frame.size
+        mapContentSize = scrollViewContent.frame.size
+        mapScrollView.contentSize = mapContentSize
         
-        /* Police Stations:
-            377,362,
-            413,247, (not correct?)
-            730,390,
-            228,445,
-            740,150,
-            731,391,
-            556,175,
-            392,146,
-         */
-        addPolice("Blue",   color: UIColor.blue, pt: CGPoint(x: 377, y: 362))
-        addPolice("Red",    color: UIColor.red, pt: CGPoint(x: 740, y: 150))
-        addPolice("Green",  color: UIColor.green, pt: CGPoint(x: 228, y: 445))
-        addPolice("Yellow", color: UIColor.yellow, pt: CGPoint(x: 731, y: 391))
-        addPolice("Brown",  color: UIColor.orange, pt: CGPoint(x: 392, y: 146))
-        update()
-        DispatchQueue.main.async { 
-            self.mapScrollView.zoomScale = self.mapScrollView.frame.size.height / self.scrollViewContent.frame.size.height
-        }
+        resetGame()
     }
 
     override func didReceiveMemoryWarning() {

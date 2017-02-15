@@ -17,18 +17,19 @@ class PoliceView : UIView {
         self.name = withName
         self.color = color
         self.node = node
-        super.init(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
+        super.init(frame: CGRect(x: 0, y: 0, width: 30, height: 30))
         self.backgroundColor = UIColor.clear
         self.isOpaque = false;
     }
     
     override func draw(_ rect: CGRect)
     {
-        let ctx = UIGraphicsGetCurrentContext()
-        ctx?.setFillColor(color.cgColor)
-        ctx?.addArc(center: CGPoint(x:10,y:10), radius: 10, startAngle: 0, endAngle: CGFloat(2 * M_PI), clockwise: true)
-        ctx?.closePath()
-        ctx?.drawPath(using: .fill)
+        let center = CGPoint(x:rect.midX, y:rect.midY)
+        let ctx = UIGraphicsGetCurrentContext()!
+        ctx.setFillColor(color.cgColor)
+        ctx.addArc(center: center, radius: 10, startAngle: 0, endAngle: CGFloat(2 * M_PI), clockwise: true)
+        ctx.closePath()
+        ctx.drawPath(using: .fill)        
     }
     
     required init?(coder aDecoder: NSCoder) {
