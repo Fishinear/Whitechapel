@@ -48,24 +48,40 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
     
     var mapContentSize = CGSize()
     var tiledLayer: CATiledLayer?
-    var game = Game()
+    var game: Game = Game(policeLocations: [:])
     var number = 1
     var possibleJackPositions: Set<Node> = []
     var certainJackPast: Set<Node> = []
     var possibleJackPast: Set<Node> = []
+    var policeViews: [String:PoliceView] = [:]
     
-    func update() {
+    func update()
+    {
         certainJackPast = game.certainJackPast
         possibleJackPast = game.possibleJackPast
         possibleJackPositions = game.currentJackLocations
         mapView.setNeedsDisplay()
-        game.graph.printGraph()
+        game.current.graph.printGraph()
+        policeViews.forEach { (name: String, view: PoliceView) in
+            view.update(node:game.current.policeNodes[name]!)
+        }
     }
-        
-    @IBAction func moveJack(_ sender: AnyObject) {
+    
+    @IBAction
+    func moveJack(_ sender: AnyObject)
+    {
         let enabled = game.murderLocations.count != 0
         let controller = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        var action = UIAlertAction(title: "Walk", style: .default, handler: { _ in
+        let undoDescription = game.undoActionDescription()
+        var action = UIAlertAction(title: undoDescription != nil ? "Undo \(undoDescription!)" : "Undo",
+                                   style: .default,
+                                   handler: { _ in
+            self.game.undo()
+            self.update()
+        })
+        action.isEnabled = undoDescription != nil
+        controller.addAction(action)
+        action = UIAlertAction(title: "Walk", style: .default, handler: { _ in
             self.game.doJackStep(.walk)
             self.update()
         })
@@ -84,9 +100,17 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
         action.isEnabled = enabled
         controller.addAction(action)
         action = UIAlertAction(title: "Walk to hideout", style: .destructive, handler: { _ in
-            self.game.doJackStep(.walk)
-            self.game.newRound()
-            self.update()
+            let confirmation = UIAlertController(title: "Start new round",
+                                                 message: "Are you sure you want Jack to walk to his hideout and start a new round?",
+                                                 preferredStyle: .alert)
+            confirmation.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            confirmation.addAction(UIAlertAction(title: "New round", style: .destructive, handler: { _ in
+                self.game.doJackStep(.walk)
+                self.game.newRound()
+                self.update()
+            }))
+            confirmation.view.layoutIfNeeded()
+            self.present(confirmation, animated: true, completion: nil)
         })
         action.isEnabled = enabled
         controller.addAction(action)
@@ -115,37 +139,34 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
         self.present(controller, animated: true, completion:nil)
     }
     
-    func addPolice(_ name:String, color:UIColor, pt:CGPoint)
-    {
-        if let node = game.setPoliceLocation(name, loc: pt) {
-            let view = PoliceView(withName:name, color: color, node:node)
-            overlayView.addSubview(view)
-            view.center = pt
-            let dragGesture = UIPanGestureRecognizer(target: self, action: #selector(ViewController.dragPolice))
-            view.addGestureRecognizer(dragGesture)
-            let scrollGesture = mapScrollView.panGestureRecognizer
-            scrollGesture.require(toFail: dragGesture)
-        }
-    }
-    
     func resetGame()
     {
-        /* Police Stations:
-         377,362, blue
-         228,445, green
-         740,147, red
-         731,391, yellow
-         392,146, orange
-         556,175,
-         593,351,
-         */
-        game = Game()
+        // Police Stations:
+        let policeData = ["Blue":   (CGPoint(x: 377, y: 362), UIColor.blue),
+                          "Red":    (CGPoint(x: 740, y: 150), UIColor.red),
+                          "Green":  (CGPoint(x: 228, y: 445), UIColor.green),
+                          "Yellow": (CGPoint(x: 731, y: 391), UIColor.yellow),
+                          "Brown":  (CGPoint(x: 392, y: 146), UIColor.orange),
+//                          "":       (CGPoint(x: 556, y: 175), UIColor.black),
+//                          "":       (CGPoint(x: 593, y: 351), UIColor.black),
+                          ]
+        
+        game = Game(policeLocations: policeData.mapValues(transform: { $0.0 }))
+        
         overlayView.subviews.forEach { $0.removeFromSuperview() }
-        addPolice("Blue",   color: UIColor.blue, pt: CGPoint(x: 377, y: 362))
-        addPolice("Red",    color: UIColor.red, pt: CGPoint(x: 740, y: 150))
-        addPolice("Green",  color: UIColor.green, pt: CGPoint(x: 228, y: 445))
-        addPolice("Yellow", color: UIColor.yellow, pt: CGPoint(x: 731, y: 391))
-        addPolice("Brown",  color: UIColor.orange, pt: CGPoint(x: 392, y: 146))
+        
+        policeData.forEach { (name: String, data: (location: CGPoint, color: UIColor)) in
+            if let node = game.current.policeNodes[name] {
+                let view = PoliceView(withName:name, color: data.color, node:node)
+                overlayView.addSubview(view)
+                view.center = node.location
+                let dragGesture = UIPanGestureRecognizer(target: self, action: #selector(ViewController.dragPolice))
+                view.addGestureRecognizer(dragGesture)
+                let scrollGesture = mapScrollView.panGestureRecognizer
+                scrollGesture.require(toFail: dragGesture)
+                policeViews[name] = view
+            }
+        }
 
         update()
         DispatchQueue.main.async {
@@ -299,8 +320,8 @@ class ViewController: UIViewController, UIScrollViewDelegate, CALayerDelegate
         recognizer.view!.center = location
         if (recognizer.state == .ended) {
             let view = recognizer.view! as! PoliceView
-            if let node = game.setPoliceLocation(view.name, loc: location) {
-                view.node = node
+            if let node = game.movePolice(view.name, loc: location) {
+                view.update(node: node)
             }
             view.center = view.node.location
         }

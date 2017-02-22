@@ -8,60 +8,55 @@
 
 import UIKit
 
-infix operator ||=
-extension Bool {
-    @discardableResult
-    static func ||= (variable: inout Bool, value: Bool) -> Bool {
-        variable = variable || value
-        return variable
-    }
-}
-
 class DagStep : Hashable {
     enum Kind : Int { case walk, coach, alley }
+    enum TraverseAction : Int { case keep, delete, traverse }
     
     var nextSteps : Array<DagStep> = []
     var kind : Kind
     var node : Node
-    var deletedAtTime : Int
     
-    var isLeaf : Bool { return nextSteps.isEmpty }
+    static let doTraverse = DagStep()
     
-    /// Return the Traverse value from the action in traverse, if you want to traverse the tree
-    static let Traverse = DagStep()
-    
-    fileprivate func traverseStep(_ visited:inout [DagStep:DagStep?], action:(DagStep) -> DagStep?) -> DagStep?
+    func isLeaf() -> Bool
     {
-        if let newStep = visited[self] {
+        return nextSteps.isEmpty
+    }
+
+    private func traverseStep(_ visited:inout [DagStep:DagStep?], action:(DagStep) -> DagStep?) -> DagStep?
+    {
+        if let result = visited[self] {
             // if we have already examined this step, then simply return the previous result
-            return newStep
+            return result
         }
-        var newStep = action(self)
-        if newStep === DagStep.Traverse && !isLeaf {
-            // if this is a Leaf node, then (if it should not be removed), we will keep it.
-            // otherwise, we examine the children.
+        var result = action(self)
+        if result === DagStep.doTraverse {
             
-            let children = nextSteps.mapFilter {
-                $0.traverseStep(&visited, action: action)
-            }
-            if children.isEmpty {
-                // if the children are all removed, then this step cannot be reached either
-                // and so it needs to be removed
-                newStep = nil
-            } else if children == nextSteps {
-                // optimization: simply return self if the children have not changed
-                newStep = self
-            } else {
-                // otherwise, create a new step with the new children
-                newStep = DagStep(node, kind)
-                newStep!.nextSteps = children
+            result = self
+            if (!isLeaf()) {
+                // this is not a Leaf node, examine the children.
+                var keep = true
+                var children:[DagStep] = []
+                for step in nextSteps {
+                    let newNode = step.traverseStep(&visited, action: action)
+                    keep &&= (newNode === step)
+                    if (newNode != nil) {
+                        children.append(newNode!)
+                    }
+                }
+                if children.isEmpty {
+                    // remove this step if it has no children anymore
+                    result = nil
+                } else if !keep {
+                    // optimization, we keep the existing object if it has not changed
+                    // create a new one otherwise
+                    result = DagStep(self)
+                    result!.nextSteps = children
+                }
             }
         }
-        if newStep === DagStep.Traverse {
-            newStep = self
-        }
-        visited[self] = newStep
-        return newStep
+        visited[self] = result
+        return result
     }
     
     /// Traverse through the graph that is reachable from this step,
@@ -70,13 +65,13 @@ class DagStep : Hashable {
     /// - parameters:
     ///   - action: The action can return three values for a step, to determine what should be done. Return
     ///     - **a new step** to include the step and all its decendants (the new step can be the argument to action itself),
-    ///     - **nil** to exclude the step and all its decendants, or
-    ///     - **.Traverse** to include the step, unless all decendants are excluded.
+    ///     - **nil** to exclude the step and all its unique decendants, or
+    ///     - **.doTraverse** to include the step, unless all decendants are excluded.
     /// - returns: the new graph
     @discardableResult
     func traverse(_ action:(DagStep) -> DagStep?) -> DagStep?
     {
-        var visited:[DagStep:DagStep?] = [:]
+        var visited: [DagStep:DagStep?] = [:]
         return traverseStep(&visited, action: action)
     }
     
@@ -86,7 +81,9 @@ class DagStep : Hashable {
     /// - returns: the reduced graph
     func exclude(_ excluded:Node) -> DagStep?
     {
-        return traverse { (step) in step.node == excluded ? nil : .Traverse }
+        return traverse() { (step) in
+            step.node == excluded ? nil : .doTraverse
+        }
     }
     
     /// Ensures that all paths through the graph do **not** contain a particular node as a leaf
@@ -95,7 +92,9 @@ class DagStep : Hashable {
     /// - returns: the reduced graph
     func excludeLeaf(_ excluded:Node) -> DagStep?
     {
-        return traverse { (step) in (step.isLeaf && step.node == excluded) ? nil : .Traverse }
+        return traverse() { (step) in
+            (step.isLeaf() && step.node == excluded) ? nil : .doTraverse
+        }
     }
     
     /// Ensure that all paths through the graph contain a particular node
@@ -104,46 +103,67 @@ class DagStep : Hashable {
     /// - returns: the reduced graph
     func include(_ included:Node) -> DagStep?
     {
-        return traverse { (step) in step.node == included ? step : (step.isLeaf ? nil : .Traverse) }
+        return traverse() { (step) in
+            step.node == included ? step : (step.isLeaf() ? nil : .doTraverse)
+        }
     }
     
-    
-    fileprivate func extendStep(_ kind: Kind,
-                                traversable:Set<Node.Kind>,
-                                map: Map,
-                                time:Int,
-                                level:Int,
-                                _ addedSteps:inout [Node:DagStep],
-                                _ visitedLeaves:inout Set<DagStep>) -> Bool
+    private func extendStep(_ kind: Kind,
+                    traversable: Set<Node.Kind>,
+                    map: Map,
+                    visited: inout [DagStep:DagStep],
+                    addedSteps: inout [Node:DagStep],
+                    parent: DagStep? = nil)
+        -> DagStep?
     {
-        if deletedAtTime <= time {
-            return false
+        if let result = visited[self] {
+            // if we have already examined this step, then simply return the previous result
+            return result
         }
-        if level == time - 1 {
-            if !visitedLeaves.contains(self) {
-                let childNodes = map.reachable(from: node, traversable: traversable)
-                nextSteps = childNodes.map { node in
+        var result: DagStep? = nil
+        if isLeaf() {
+            var childNodes = map.reachable(from: node, traversable: traversable)
+            if let parentNode = parent?.node {
+                childNodes.remove(parentNode)
+            }
+            // only keep the step if it can be extended
+            if !childNodes.isEmpty {
+                result = DagStep(self)
+                result!.nextSteps = childNodes.map { node in
                     addedSteps.getOrSet(node) { DagStep(node, kind) }
                 }
-                visitedLeaves.insert(self)
+            }
+            if (parent == nil) {
+                // we only store the result for re-use if we did not filter out the parent node
+                visited[self] = result
             }
         } else {
-            var hasChildren = false
+            // this is not a Leaf node, examine the children.
+            var children:[DagStep] = []
             for step in nextSteps {
-                hasChildren ||= step.extendStep(kind,
-                                                traversable: traversable,
-                                                map: map,
-                                                time: time,
-                                                level: level+1,
-                                                &addedSteps,
-                                                &visitedLeaves)
+                let newStep = step.extendStep(kind,
+                                              traversable: traversable,
+                                              map: map,
+                                              visited: &visited,
+                                              addedSteps: &addedSteps,
+                                              parent: parent == nil ? nil : self)
+                if (newStep != nil) {
+                    children.append(newStep!)
+                }
             }
-            if !hasChildren {
-                deletedAtTime = time
-                return false
+            if children.isEmpty {
+                // remove this step if it has no children anymore
+                result = nil
+            } else {
+                // optimization, we keep the existing object if it has not changed
+                // create a new one otherwise
+                result = DagStep(self)
+                result!.nextSteps = children
             }
+            visited[self] = result
         }
-        return true
+        return result
+
     }
     
     /// Extend the graph with new steps with nodes that are reachable from the leaf nodes.
@@ -154,18 +174,17 @@ class DagStep : Hashable {
     ///   - traversable: the Node kinds that can be walked through to reach a neighbour Node
     ///   - map: the map to determine reachability from
     ///   - noGrandpa: set to true if it is not allowed to reach the node you just came from
-    /// - returns: the new graph
-    func extend(_ kind: Kind, traversable:Set<Node.Kind>, map: Map, time: Int) -> Bool
+    /// - returns: the new graph after the extend
+    func extend(_ kind: Kind, traversable:Set<Node.Kind>, map: Map, noGrandpa: Bool = false) -> DagStep?
     {
+        var visited: [DagStep:DagStep] = [:]
         var addedSteps : [Node:DagStep] = [:]
-        var visitedLeaves : Set<DagStep> = []
         return extendStep(kind,
                           traversable: traversable,
                           map: map,
-                          time: time,
-                          level: 0,
-                          &addedSteps,
-                          &visitedLeaves)
+                          visited: &visited,
+                          addedSteps: &addedSteps,
+                          parent: noGrandpa ? self : nil)
     }
     
     /// Returns the set of leaf nodes
@@ -173,11 +192,11 @@ class DagStep : Hashable {
     func leafNodes() -> Set<Node>
     {
         var nodes: Set<Node> = [];
-        traverse { (step) in
-            if (step.isLeaf) {
+        traverse() { (step) in
+            if step.isLeaf() {
                 nodes.insert(step.node)
             }
-            return .Traverse
+            return .doTraverse
         }
         return nodes;
     }
@@ -187,44 +206,71 @@ class DagStep : Hashable {
     func reachedNodes() -> Set<Node>
     {
         var nodes: Set<Node> = [];
-        traverse { (step) in
-            if (!step.isLeaf) {
+        traverse() { (step) in
+            if !step.isLeaf() {
                 nodes.insert(step.node)
             }
-            return .Traverse
+            return .doTraverse
         }
         return nodes;
+    }
+    
+    private func nodesOnAllPathsStep(_ visited: inout [DagStep:Set<Node>]) -> Set<Node>
+    {
+        var nodes: Set<Node> = []
+        var first = true
+        
+        if let existing = visited[self] {
+            // if we have already examined this step, then simply return the previous result
+            return existing
+        }
+        if !isLeaf() {
+            for child in nextSteps {
+                let result = child.nodesOnAllPathsStep(&visited)
+                if first {
+                    nodes = result
+                    first = false
+                } else {
+                    nodes = nodes.intersection(result)
+                }
+            }
+        }
+        nodes.insert(node)
+        visited[self] = nodes
+        return nodes
     }
     
     /// Returns the nodes that are present on all possible paths through the graph
     /// - returns: the set of nodes
     func nodesOnAllPaths() -> Set<Node>
     {
-        var nodes: Set<Node> = []
-        var isFirst = true
-        for child in self.nextSteps {
-            let childNodes = child.nodesOnAllPaths()
-            if isFirst {
-                nodes = childNodes;
-                isFirst = false
-            } else {
-                nodes.formIntersection(childNodes)
-            }
-        }
-        nodes.insert(self.node)
-        return nodes
+        var visited: [DagStep:Set<Node>] = [:]
+        return self.nodesOnAllPathsStep(&visited)
+        
     }
     
-    func printGraphStep(_ level: Int, visited:inout Set<DagStep>)
+    /// Creates a new graph with an added next step
+    /// - parameters:
+    ///   - node: the node for the next step
+    /// - returns: the new graph
+    func addNextStep(_ node:Node) -> DagStep
+    {
+        let newGraph = DagStep(self)
+        newGraph.nextSteps = self.nextSteps
+        newGraph.nextSteps.append(DagStep(node))
+        return newGraph
+    }
+    
+    private func printGraphStep(_ level: Int, visited:inout Set<DagStep>)
     {
         for _ in 0...level {
             print("  ", terminator:"")
         }
         if visited.contains(self) {
-            print(String(format:"(%d)", self.node.number))
+            print(String(format:"(%d)", node.number))
             return
         }
-        print(self.node.number)
+        print(node.number)
         visited.insert(self)
         for child in nextSteps {
             child.printGraphStep(level + 1, visited: &visited)
@@ -240,14 +286,20 @@ class DagStep : Hashable {
     
     var hashValue: Int { return Unmanaged.passUnretained(self).toOpaque().hashValue }
     
-    init(_ node:Node, _ kind:Kind = .walk) {
+    init(_ node:Node, _ kind:Kind = .walk)
+    {
         self.node = node
         self.kind = kind
-        self.deletedAtTime = Int.max
     }
     
-    convenience init() {
+    convenience init()
+    {
         self.init(Node(0, CGPoint(x:0, y:0)))
+    }
+    
+    convenience init(_ other: DagStep)
+    {
+        self.init(other.node, other.kind)
     }
 }
 

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D973D4C71E54A0AD0076BE56 /* DagStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = D973D4C61E54A0AD0076BE56 /* DagStep.swift */; };
+		D973D4C91E57163A0076BE56 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D973D4C81E57163A0076BE56 /* Extensions.swift */; };
 		D9F261201CA58B9E00BEA18C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F2611F1CA58B9E00BEA18C /* AppDelegate.swift */; };
 		D9F261221CA58B9E00BEA18C /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F261211CA58B9E00BEA18C /* ViewController.swift */; };
 		D9F261251CA58B9E00BEA18C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D9F261231CA58B9E00BEA18C /* Main.storyboard */; };
@@ -16,7 +17,6 @@
 		D9F261341CA595A000BEA18C /* Map.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F261331CA595A000BEA18C /* Map.swift */; };
 		D9F261361CA5970B00BEA18C /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F261351CA5970B00BEA18C /* Node.swift */; };
 		D9F2613C1CA5C4E400BEA18C /* w.png in Resources */ = {isa = PBXBuildFile; fileRef = D9F2613B1CA5C4E400BEA18C /* w.png */; };
-		D9F2613E1CA5EEAA00BEA18C /* Step.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F2613D1CA5EEAA00BEA18C /* Step.swift */; };
 		D9F261401CA679DF00BEA18C /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F2613F1CA679DF00BEA18C /* Game.swift */; };
 		D9F261441CA7068500BEA18C /* PoliceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F261431CA7068500BEA18C /* PoliceView.swift */; };
 		D9F261461CA743CD00BEA18C /* TiledView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F261451CA743CD00BEA18C /* TiledView.swift */; };
@@ -24,6 +24,7 @@
 
 /* Begin PBXFileReference section */
 		D973D4C61E54A0AD0076BE56 /* DagStep.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DagStep.swift; sourceTree = "<group>"; };
+		D973D4C81E57163A0076BE56 /* Extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		D9F2611C1CA58B9D00BEA18C /* Whitechapel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Whitechapel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D9F2611F1CA58B9E00BEA18C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D9F261211CA58B9E00BEA18C /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -34,7 +35,6 @@
 		D9F261331CA595A000BEA18C /* Map.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Map.swift; sourceTree = "<group>"; };
 		D9F261351CA5970B00BEA18C /* Node.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		D9F2613B1CA5C4E400BEA18C /* w.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = w.png; sourceTree = "<group>"; };
-		D9F2613D1CA5EEAA00BEA18C /* Step.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Step.swift; sourceTree = "<group>"; };
 		D9F2613F1CA679DF00BEA18C /* Game.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
 		D9F261431CA7068500BEA18C /* PoliceView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PoliceView.swift; sourceTree = "<group>"; };
 		D9F261451CA743CD00BEA18C /* TiledView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TiledView.swift; sourceTree = "<group>"; };
@@ -70,11 +70,11 @@
 		D9F2611E1CA58B9E00BEA18C /* Whitechapel */ = {
 			isa = PBXGroup;
 			children = (
+				D973D4C81E57163A0076BE56 /* Extensions.swift */,
 				D9F261331CA595A000BEA18C /* Map.swift */,
 				D9F2611F1CA58B9E00BEA18C /* AppDelegate.swift */,
 				D9F261211CA58B9E00BEA18C /* ViewController.swift */,
 				D9F261351CA5970B00BEA18C /* Node.swift */,
-				D9F2613D1CA5EEAA00BEA18C /* Step.swift */,
 				D973D4C61E54A0AD0076BE56 /* DagStep.swift */,
 				D9F2613F1CA679DF00BEA18C /* Game.swift */,
 				D9F261431CA7068500BEA18C /* PoliceView.swift */,
@@ -164,6 +164,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D9F261461CA743CD00BEA18C /* TiledView.swift in Sources */,
+				D973D4C91E57163A0076BE56 /* Extensions.swift in Sources */,
 				D9F261221CA58B9E00BEA18C /* ViewController.swift in Sources */,
 				D9F261341CA595A000BEA18C /* Map.swift in Sources */,
 				D9F261441CA7068500BEA18C /* PoliceView.swift in Sources */,
@@ -171,7 +172,6 @@
 				D9F261201CA58B9E00BEA18C /* AppDelegate.swift in Sources */,
 				D9F261361CA5970B00BEA18C /* Node.swift in Sources */,
 				D973D4C71E54A0AD0076BE56 /* DagStep.swift in Sources */,
-				D9F2613E1CA5EEAA00BEA18C /* Step.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

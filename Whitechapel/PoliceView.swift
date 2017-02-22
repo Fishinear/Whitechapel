@@ -32,6 +32,12 @@ class PoliceView : UIView {
         ctx.drawPath(using: .fill)        
     }
     
+    func update(node:Node)
+    {
+        self.node = node
+        self.center = node.location
+    }
+    
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
